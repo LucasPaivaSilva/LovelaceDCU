@@ -6,7 +6,29 @@
 #include <SPI.h>
 #include <SD.h>
 
-#define FILE_NAME "/lovelace2506.csv"
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+
+// Variáveis para exibição
+float inverterTemp = 12.3; // Exemplo
+float motorTemp = 45.6; // Exemplo
+int inverterErrorCode = 0; // Exemplo
+uint8_t pwmData, dpsUsage, torqueCode, errorCode;
+// Variáveis adicionais
+float hvVoltage = 350.0;  // Exemplo de inicialização
+float torqueLimit = 0; // Exemplo de inicialização
+
+// Configuração da Rede WiFi
+const char* ssid = "Lovelace-DCU";
+const char* password = "04072024";
+
+#define FILE_NAME "/lovelace1207-ufsc.csv"
+
+bool flagUpdateTorqueMode = false;
+uint8_t torqueModeMod = 0;
+
+// Criar objeto servidor na porta 80
+AsyncWebServer server(80);
 
 // Função para listar diretórios
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
@@ -121,7 +143,7 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
 // Função para adicionar a arquivos
 void appendFile(fs::FS &fs, const char *path, const char *message)
 {
-    Serial.printf("Appending to file: %s\n", path);
+    //Serial.printf("Appending to file: %s\n", path);
 
     File file = fs.open(path, FILE_APPEND);
     if (!file)
@@ -131,7 +153,7 @@ void appendFile(fs::FS &fs, const char *path, const char *message)
     }
     if (file.print(message))
     {
-        Serial.println("Message appended");
+        //Serial.println("Message appended");
     }
     else
     {
@@ -175,10 +197,133 @@ void SD_test(void)
 
 }
 
+void sendTorqueMod(int mode){
+    CAN_frame_t tx_frame;
+    tx_frame.FIR.B.FF = CAN_frame_std;
+    tx_frame.MsgID = 0x041;
+    tx_frame.FIR.B.DLC = 8;
+    tx_frame.data.u8[0] = 0xFF;
+    tx_frame.data.u8[1] = 0xFF;
+    tx_frame.data.u8[2] = 0xFF;
+    tx_frame.data.u8[3] = 0xFF;
+    tx_frame.data.u8[4] = 0xFF;
+    tx_frame.data.u8[5] = 0xFF;
+    tx_frame.data.u8[6] = 0xFF;
+    tx_frame.data.u8[7] = 0xFF;
+    switch (mode)
+    {
+    case 1:
+        tx_frame.data.u8[0] = 0x01;
+        break;
+    case 2:
+        tx_frame.data.u8[0] = 0x02;
+        break;
+    case 3: 
+        tx_frame.data.u8[0] = 0x03;
+        break;
+    case 4:
+        tx_frame.data.u8[0] = 0x04;
+        break;
+    case 5:
+        tx_frame.data.u8[0] = 0x05;
+        break;
+    
+    default:
+        tx_frame.data.u8[0] = 0x00;
+        break;
+    }
+    ESP32Can.CANWriteFrame(&tx_frame);
+
+}
+
 // Configuração do CAN
 CAN_device_t CAN_cfg;
 const int interval = 5000;
 unsigned long previousMillis = 0;
+
+void setupServer() {
+    // Inicializa o ESP32 como um ponto de acesso
+    WiFi.softAP(ssid, password);
+    IPAddress IP = WiFi.softAPIP();
+    Serial.println();
+    Serial.print("IP do Ponto de Acesso: ");
+    Serial.println(IP);
+
+    // Rotas
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        char htmlResponse[2500];
+        sprintf(htmlResponse, "<!DOCTYPE html><html><head><title>LovelaceDCU</title>"
+                              "<meta charset=\"UTF-8\">"
+                              "<style>"
+                              "body { font-family: Arial, sans-serif; font-size: 24px; }"
+                              "h1 { font-size: 36px; color: navy; }"
+                              "button { font-size: 30px; margin: 10px; padding: 10px; }"
+                              "</style>"
+                              "<script>"
+                              "setInterval(function() {"
+                              "fetch('/data').then(response => response.json()).then(data => {"
+                              "document.getElementById('tempInversor').innerText = data.tempInversor.toFixed(1) + '°C';"
+                              "document.getElementById('tempMotor').innerText = data.tempMotor.toFixed(1) + '°C';"
+                              "document.getElementById('erro').innerText = data.erro;"
+                              "document.getElementById('hvVoltage').innerText = data.hvVoltage.toFixed(1) + 'V';"
+                              "document.getElementById('torqueLimit').innerText = data.torqueLimit.toFixed(1);"
+                              "});"
+                              "}, 1000);"
+                              "</script>"
+                              "</head><body>"
+                              "<h1>Lovelace DCU - WebServer</h1>"
+                              "<button onclick=\"location.href='/func1'\">Mode1</button>"
+                              "<button onclick=\"location.href='/func2'\">Mode2</button>"
+                              "<button onclick=\"location.href='/func3'\">Mode3</button>"
+                              "<button onclick=\"location.href='/func4'\">Mode4</button>"
+                              "<p>Inverter temperature: <span id='tempInversor'>%.1f°C</span></p>"
+                              "<p>Motor temperature: <span id='tempMotor'>%.1f°C</span></p>"
+                              "<p>Error: <span id='erro'>%d</span></p>"
+                              "<p>HV Voltage: <span id='hvVoltage'>%.1fV</span></p>"
+                              "<p>Torque Limit: <span id='torqueLimit'>%.1f</span></p>"
+                              "</body></html>", inverterTemp, motorTemp, errorCode, hvVoltage, torqueLimit);
+        request->send(200, "text/html", htmlResponse);
+    });
+
+    server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String jsonData = String("{\"tempInversor\":" + String(inverterTemp) + 
+                                 ",\"tempMotor\":" + String(motorTemp) + 
+                                 ",\"erro\":" + String(errorCode) + 
+                                 ",\"hvVoltage\":" + String(hvVoltage) +
+                                 ",\"torqueLimit\":" + String(torqueLimit) + "}");
+        request->send(200, "application/json", jsonData);
+    });
+
+    // Funções para os botões
+    server.on("/func1", HTTP_GET, [](AsyncWebServerRequest *request) {
+        torqueModeMod = 1; 
+        flagUpdateTorqueMode = true;
+        request->redirect("/");
+        //sendTorqueMod(1);
+    });
+    server.on("/func2", HTTP_GET, [](AsyncWebServerRequest *request) {
+        torqueModeMod = 2; 
+        flagUpdateTorqueMode = true;
+        request->redirect("/");
+    });
+    server.on("/func3", HTTP_GET, [](AsyncWebServerRequest *request) {
+        torqueModeMod = 3; 
+        flagUpdateTorqueMode = true;
+        request->redirect("/");
+    });
+    server.on("/func4", HTTP_GET, [](AsyncWebServerRequest *request) {
+        torqueModeMod = 4; 
+        flagUpdateTorqueMode = true;
+        request->redirect("/");
+    });
+
+    // Inicia o servidor
+    server.begin();
+}
+
+float convert_to_float(uint16_t value, float scale) {
+    return value * scale;
+}
 
 // Função de setup
 void setup()
@@ -191,9 +336,11 @@ void setup()
 
     Serial.begin(115200);
 
+    setupServer();
+
     SD_test();
 
-    delay(10000);
+    delay(6000);
 
     Serial.println("Basic Demo - ESP32-Arduino-CAN");
     CAN_cfg.speed = CAN_SPEED_500KBPS;
@@ -243,28 +390,39 @@ void loop()
         // Adicionar ao arquivo CSV
         appendFile(SD, FILE_NAME, data);
 
+        if (rx_frame.MsgID == 0x048) { // Supondo que o ID da mensagem seja 0x048
+            pwmData = rx_frame.data.u8[0];
+            dpsUsage = rx_frame.data.u8[1];
+            torqueCode = rx_frame.data.u8[2];
+            errorCode = rx_frame.data.u8[3];
+            torqueLimit = (float) (torqueCode * 0.1f);
+            
+        }
+
+        if (rx_frame.MsgID == 0x046) { // Supondo que o ID da mensagem seja 0x046
+            // Extrair as temperaturas
+            uint16_t motor_temp_raw = (rx_frame.data.u8[5] << 8) | rx_frame.data.u8[4];
+            uint16_t inverter_temp_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
+            uint16_t hv_voltage_raw = (rx_frame.data.u8[1] << 8) | rx_frame.data.u8[0];
+
+            // Converter para float (assumindo que cada unidade representa 0.1 grau)
+            motorTemp = convert_to_float(motor_temp_raw, 0.1);
+            inverterTemp = convert_to_float(inverter_temp_raw, 0.1);
+            hvVoltage = convert_to_float(hv_voltage_raw, 0.1);
+        }
+
         // Print debug information
-        Serial.print(data);
+        //Serial.print(data);
     }
 
-    // Enviar mensagem CAN
-    if (currentMillis - previousMillis >= interval)
+     // Enviar mensagem CAN
+    if (flagUpdateTorqueMode == true)
     {
-        previousMillis = currentMillis;
-        CAN_frame_t tx_frame;
-        tx_frame.FIR.B.FF = CAN_frame_std;
-        tx_frame.MsgID = 0x042;
-        tx_frame.FIR.B.DLC = 8;
-        tx_frame.data.u8[0] = 0xFF;
-        tx_frame.data.u8[1] = 0xFF;
-        tx_frame.data.u8[2] = 0x03;
-        tx_frame.data.u8[3] = 0x03;
-        tx_frame.data.u8[4] = 0xFF;
-        tx_frame.data.u8[5] = 0x05;
-        tx_frame.data.u8[6] = 0x06;
-        tx_frame.data.u8[7] = 0x07;
+        flagUpdateTorqueMode = false;
+        sendTorqueMod(torqueModeMod);
 
         //ESP32Can.CANWriteFrame(&tx_frame);
-        Serial.println("CAN send done");
+        //Serial.println("CAN send done");
     }
+
 }
