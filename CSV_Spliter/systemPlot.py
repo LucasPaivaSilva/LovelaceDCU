@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Carregar o arquivo CSV
-file_path = '1Teste_part_20.csv'
+file_path = 'lovelace1507-ufsc_part_83.csv'
 df = pd.read_csv(file_path)
 
 # Converter colunas de dados para inteiros
@@ -70,7 +70,7 @@ def extract_values_047(row):
 for index, row in df.iterrows():
     if row['msgId'] == 42:  # Corrigido para 42
         accel_value, brake_value, regen_brake_flag, rtd_flag, mode, generic_flag = extract_values_042(row)
-        df.at[index, 'accel_value'] = accel_value
+        df.at[index, 'accel_value'] = accel_value * 2
         df.at[index, 'brake_value'] = brake_value
         df.at[index, 'regen_brake_flag'] = regen_brake_flag
         df.at[index, 'rtd_flag'] = rtd_flag
@@ -109,8 +109,8 @@ def plot_data(start_time, end_time):
 
     # Acelerador, Freio e RPM
     plt.subplot(2, 2, 1)
-    plt.plot(df_042['tempoDoSistema'], df_042['accel_value'], label='Accel Value')
-    plt.plot(df_042['tempoDoSistema'], df_042['brake_value'], label='Brake Value')
+    #plt.plot(df_042['tempoDoSistema'], df_042['accel_value'], label='Accel Value')
+    #plt.plot(df_042['tempoDoSistema'], df_042['brake_value'], label='Brake Value')
     plt.plot(df_047['tempoDoSistema'], df_047['motor_rpm'], label='Motor RPM')
     plt.xlabel('Time (ms)')
     plt.ylabel('Value')
@@ -147,4 +147,4 @@ def plot_data(start_time, end_time):
     plt.tight_layout()
     plt.show()
 
-plot_data(30000, 70000)
+plot_data(260000, 285000)

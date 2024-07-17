@@ -18,11 +18,16 @@ uint8_t pwmData, dpsUsage, torqueCode, errorCode;
 float hvVoltage = 350.0;  // Exemplo de inicialização
 float torqueLimit = 0; // Exemplo de inicialização
 
+float dcCurrent = 1234;
+float inverterPower = 1234;
+float motorPower = 1234;
+float motorRPM = 1234;
+
 // Configuração da Rede WiFi
 const char* ssid = "Lovelace-DCU";
-const char* password = "04072024";
+const char* password = "15072024";
 
-#define FILE_NAME "/lovelace1207-ufsc.csv"
+#define FILE_NAME "/lovelace1507-ufsc.csv"
 
 bool flagUpdateTorqueMode = false;
 uint8_t torqueModeMod = 0;
@@ -251,7 +256,7 @@ void setupServer() {
 
     // Rotas
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        char htmlResponse[2500];
+        char htmlResponse[4000];
         sprintf(htmlResponse, "<!DOCTYPE html><html><head><title>LovelaceDCU</title>"
                               "<meta charset=\"UTF-8\">"
                               "<style>"
@@ -267,6 +272,10 @@ void setupServer() {
                               "document.getElementById('erro').innerText = data.erro;"
                               "document.getElementById('hvVoltage').innerText = data.hvVoltage.toFixed(1) + 'V';"
                               "document.getElementById('torqueLimit').innerText = data.torqueLimit.toFixed(1);"
+                              "document.getElementById('hvCurrent').innerText = data.hvCurrent.toFixed(1) + 'A';"
+                              "document.getElementById('motorPower').innerText = data.motorPower.toFixed(1) + 'W';"
+                              "document.getElementById('inverterPower').innerText = data.inverterPower.toFixed(1) + 'W';"
+                              "document.getElementById('motorRPM').innerText = data.motorRPM.toFixed(1) + ' RPM';"
                               "});"
                               "}, 1000);"
                               "</script>"
@@ -281,7 +290,11 @@ void setupServer() {
                               "<p>Error: <span id='erro'>%d</span></p>"
                               "<p>HV Voltage: <span id='hvVoltage'>%.1fV</span></p>"
                               "<p>Torque Limit: <span id='torqueLimit'>%.1f</span></p>"
-                              "</body></html>", inverterTemp, motorTemp, errorCode, hvVoltage, torqueLimit);
+                              "<p>HV Current: <span id='hvCurrent'>%.1fA</span></p>"
+                              "<p>Motor Power: <span id='motorPower'>%.1fW</span></p>"
+                              "<p>Inverter Power: <span id='inverterPower'>%.1fW</span></p>"
+                              "<p>Motor RPM: <span id='motorRPM'>%.1f RPM</span></p>"
+                              "</body></html>", inverterTemp, motorTemp, errorCode, hvVoltage, torqueLimit, dcCurrent, motorPower, inverterPower, motorRPM);
         request->send(200, "text/html", htmlResponse);
     });
 
@@ -290,7 +303,11 @@ void setupServer() {
                                  ",\"tempMotor\":" + String(motorTemp) + 
                                  ",\"erro\":" + String(errorCode) + 
                                  ",\"hvVoltage\":" + String(hvVoltage) +
-                                 ",\"torqueLimit\":" + String(torqueLimit) + "}");
+                                 ",\"torqueLimit\":" + String(torqueLimit) +
+                                 ",\"hvCurrent\":" + String(dcCurrent) +
+                                 ",\"motorPower\":" + String(motorPower) +
+                                 ",\"inverterPower\":" + String(inverterPower) +
+                                 ",\"motorRPM\":" + String(motorRPM) + "}");
         request->send(200, "application/json", jsonData);
     });
 
@@ -299,7 +316,6 @@ void setupServer() {
         torqueModeMod = 1; 
         flagUpdateTorqueMode = true;
         request->redirect("/");
-        //sendTorqueMod(1);
     });
     server.on("/func2", HTTP_GET, [](AsyncWebServerRequest *request) {
         torqueModeMod = 2; 
@@ -402,6 +418,7 @@ void loop()
         if (rx_frame.MsgID == 0x046) { // Supondo que o ID da mensagem seja 0x046
             // Extrair as temperaturas
             uint16_t motor_temp_raw = (rx_frame.data.u8[5] << 8) | rx_frame.data.u8[4];
+            uint16_t dc_current_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
             uint16_t inverter_temp_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
             uint16_t hv_voltage_raw = (rx_frame.data.u8[1] << 8) | rx_frame.data.u8[0];
 
@@ -409,6 +426,19 @@ void loop()
             motorTemp = convert_to_float(motor_temp_raw, 0.1);
             inverterTemp = convert_to_float(inverter_temp_raw, 0.1);
             hvVoltage = convert_to_float(hv_voltage_raw, 0.1);
+            dcCurrent = convert_to_float(dc_current_raw, 0.1);
+        }
+
+        if (rx_frame.MsgID == 0x047) { // Supondo que o ID da mensagem seja 0x046
+            // Extrair as temperaturas
+            uint16_t motor_power_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
+            uint16_t inverter_power_raw = (rx_frame.data.u8[5] << 8) | rx_frame.data.u8[4];
+            uint16_t motor_RPM_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
+
+            // Converter para float (assumindo que cada unidade representa 0.1 grau)
+            motorPower = convert_to_float(motor_power_raw, 1);
+            inverterPower = convert_to_float(inverter_power_raw, 1);
+            motorRPM = convert_to_float(motor_RPM_raw, 1);
         }
 
         // Print debug information

@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 # Carregar o arquivo CSV
-file_path = "1Teste.csv"
+file_path = "lovelace1507-ufsc.csv"
 df = pd.read_csv(file_path)
 
 # Obter o nome do arquivo sem a extensão
