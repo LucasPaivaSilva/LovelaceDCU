@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Carregar o arquivo CSV
-file_path = 'lovelace1507-ufsc_part_83.csv'
+file_path = 'lovelace1707-ufsc_part_5.csv'
 df = pd.read_csv(file_path)
 
 # Converter colunas de dados para inteiros
@@ -147,4 +147,4 @@ def plot_data(start_time, end_time):
     plt.tight_layout()
     plt.show()
 
-plot_data(260000, 285000)
+plot_data(100000, 221727)

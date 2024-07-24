@@ -18,16 +18,22 @@ uint8_t pwmData, dpsUsage, torqueCode, errorCode;
 float hvVoltage = 350.0;  // Exemplo de inicialização
 float torqueLimit = 0; // Exemplo de inicialização
 
-float dcCurrent = 1234;
+float hvCurrent = 1234;
 float inverterPower = 1234;
 float motorPower = 1234;
 float motorRPM = 1234;
+float motorTorque = 0;
+
+float speed = 0;
+int pedal = 70; 
+
+bool rtd = false;      // Exemplo de inicialização
 
 // Configuração da Rede WiFi
 const char* ssid = "Lovelace-DCU";
 const char* password = "15072024";
 
-#define FILE_NAME "/lovelace1507-ufsc.csv"
+#define FILE_NAME "/lovelace2307-ufsc1.csv"
 
 bool flagUpdateTorqueMode = false;
 uint8_t torqueModeMod = 0;
@@ -202,7 +208,7 @@ void SD_test(void)
 
 }
 
-void sendTorqueMod(int mode){
+void sendTorqueMod(uint8_t mode){
     CAN_frame_t tx_frame;
     tx_frame.FIR.B.FF = CAN_frame_std;
     tx_frame.MsgID = 0x041;
@@ -215,28 +221,9 @@ void sendTorqueMod(int mode){
     tx_frame.data.u8[5] = 0xFF;
     tx_frame.data.u8[6] = 0xFF;
     tx_frame.data.u8[7] = 0xFF;
-    switch (mode)
-    {
-    case 1:
-        tx_frame.data.u8[0] = 0x01;
-        break;
-    case 2:
-        tx_frame.data.u8[0] = 0x02;
-        break;
-    case 3: 
-        tx_frame.data.u8[0] = 0x03;
-        break;
-    case 4:
-        tx_frame.data.u8[0] = 0x04;
-        break;
-    case 5:
-        tx_frame.data.u8[0] = 0x05;
-        break;
     
-    default:
-        tx_frame.data.u8[0] = 0x00;
-        break;
-    }
+    tx_frame.data.u8[0] = mode;
+
     ESP32Can.CANWriteFrame(&tx_frame);
 
 }
@@ -245,6 +232,7 @@ void sendTorqueMod(int mode){
 CAN_device_t CAN_cfg;
 const int interval = 5000;
 unsigned long previousMillis = 0;
+
 
 void setupServer() {
     // Inicializa o ESP32 como um ponto de acesso
@@ -275,9 +263,9 @@ void setupServer() {
                               "document.getElementById('hvCurrent').innerText = data.hvCurrent.toFixed(1) + 'A';"
                               "document.getElementById('motorPower').innerText = data.motorPower.toFixed(1) + 'W';"
                               "document.getElementById('inverterPower').innerText = data.inverterPower.toFixed(1) + 'W';"
-                              "document.getElementById('motorRPM').innerText = data.motorRPM.toFixed(1) + ' RPM';"
+                              "document.getElementById('speed').innerText = data.speed.toFixed(1) + ' km/h';"
                               "});"
-                              "}, 1000);"
+                              "}, 500);"
                               "</script>"
                               "</head><body>"
                               "<h1>Lovelace DCU - WebServer</h1>"
@@ -293,8 +281,8 @@ void setupServer() {
                               "<p>HV Current: <span id='hvCurrent'>%.1fA</span></p>"
                               "<p>Motor Power: <span id='motorPower'>%.1fW</span></p>"
                               "<p>Inverter Power: <span id='inverterPower'>%.1fW</span></p>"
-                              "<p>Motor RPM: <span id='motorRPM'>%.1f RPM</span></p>"
-                              "</body></html>", inverterTemp, motorTemp, errorCode, hvVoltage, torqueLimit, dcCurrent, motorPower, inverterPower, motorRPM);
+                              "<p>Motor Speed: <span id='speed'>%.1f km/h</span></p>"
+                              "</body></html>", inverterTemp, motorTemp, errorCode, hvVoltage, torqueLimit, hvCurrent, motorPower, inverterPower, speed);
         request->send(200, "text/html", htmlResponse);
     });
 
@@ -304,31 +292,31 @@ void setupServer() {
                                  ",\"erro\":" + String(errorCode) + 
                                  ",\"hvVoltage\":" + String(hvVoltage) +
                                  ",\"torqueLimit\":" + String(torqueLimit) +
-                                 ",\"hvCurrent\":" + String(dcCurrent) +
+                                 ",\"hvCurrent\":" + String(hvCurrent) +
                                  ",\"motorPower\":" + String(motorPower) +
                                  ",\"inverterPower\":" + String(inverterPower) +
-                                 ",\"motorRPM\":" + String(motorRPM) + "}");
+                                 ",\"speed\":" + String(speed) + "}");
         request->send(200, "application/json", jsonData);
     });
 
     // Funções para os botões
     server.on("/func1", HTTP_GET, [](AsyncWebServerRequest *request) {
-        torqueModeMod = 1; 
+        torqueModeMod = 4; 
         flagUpdateTorqueMode = true;
         request->redirect("/");
     });
     server.on("/func2", HTTP_GET, [](AsyncWebServerRequest *request) {
-        torqueModeMod = 2; 
+        torqueModeMod = 6; 
         flagUpdateTorqueMode = true;
         request->redirect("/");
     });
     server.on("/func3", HTTP_GET, [](AsyncWebServerRequest *request) {
-        torqueModeMod = 3; 
+        torqueModeMod = 8; 
         flagUpdateTorqueMode = true;
         request->redirect("/");
     });
     server.on("/func4", HTTP_GET, [](AsyncWebServerRequest *request) {
-        torqueModeMod = 4; 
+        torqueModeMod = 10; 
         flagUpdateTorqueMode = true;
         request->redirect("/");
     });
@@ -336,6 +324,7 @@ void setupServer() {
     // Inicia o servidor
     server.begin();
 }
+
 
 float convert_to_float(uint16_t value, float scale) {
     return value * scale;
@@ -418,17 +407,44 @@ void loop()
         if (rx_frame.MsgID == 0x046) { // Supondo que o ID da mensagem seja 0x046
             // Extrair as temperaturas
             uint16_t motor_temp_raw = (rx_frame.data.u8[5] << 8) | rx_frame.data.u8[4];
-            uint16_t dc_current_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
             uint16_t inverter_temp_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
+            uint16_t dc_current_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
             uint16_t hv_voltage_raw = (rx_frame.data.u8[1] << 8) | rx_frame.data.u8[0];
 
             // Converter para float (assumindo que cada unidade representa 0.1 grau)
             motorTemp = convert_to_float(motor_temp_raw, 0.1);
             inverterTemp = convert_to_float(inverter_temp_raw, 0.1);
             hvVoltage = convert_to_float(hv_voltage_raw, 0.1);
-            dcCurrent = convert_to_float(dc_current_raw, 0.1);
+            hvCurrent = convert_to_float(dc_current_raw, 0.1) - 1000.0;
         }
 
+        /*
+        if (rx_frame.MsgID == 0x049) {
+            // Copiar os bytes para os valores float_t
+            //memcpy(&hvCurrent, &rx_frame.data.u8[0], sizeof(float_t));
+            //memcpy(&hvVoltage, &rx_frame.data.u8[4], sizeof(float_t));
+            // Imprimir os valores recebidos
+            //Serial.print("Received current 1: ");
+            //Serial.println(hvCurrent, 6); // Exibe com 6 casas decimais
+            //Serial.print("Received voltage 2: ");
+            //Serial.println(hvVoltage, 6); // Exibe com 6 casas decimais
+        }
+
+        if (rx_frame.MsgID == 0x050) {
+            // Copiar os bytes para os valores float_t
+            memcpy(&motorPower, &rx_frame.data.u8[0], sizeof(float_t));
+            memcpy(&inverterPower, &rx_frame.data.u8[4], sizeof(float_t));
+        }
+
+        if (rx_frame.MsgID == 0x051) {
+            // Copiar os bytes para os valores float_t
+            memcpy(&motorTorque, &rx_frame.data.u8[0], sizeof(float_t));
+            memcpy(&motorRPM, &rx_frame.data.u8[4], sizeof(float_t));
+        }
+        */
+
+
+        
         if (rx_frame.MsgID == 0x047) { // Supondo que o ID da mensagem seja 0x046
             // Extrair as temperaturas
             uint16_t motor_power_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
@@ -436,10 +452,12 @@ void loop()
             uint16_t motor_RPM_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
 
             // Converter para float (assumindo que cada unidade representa 0.1 grau)
-            motorPower = convert_to_float(motor_power_raw, 1);
-            inverterPower = convert_to_float(inverter_power_raw, 1);
-            motorRPM = convert_to_float(motor_RPM_raw, 1);
+            motorPower = convert_to_float(motor_power_raw, 1) - 20000.0;
+            inverterPower = convert_to_float(inverter_power_raw, 1) - 20000.0;
+            motorRPM = convert_to_float(motor_RPM_raw, 1) - 1000.0;
+            speed = motorRPM * 0.0196;
         }
+        
 
         // Print debug information
         //Serial.print(data);
