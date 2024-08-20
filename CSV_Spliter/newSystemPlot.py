@@ -2,19 +2,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Atualizar o tamanho da fonte
-plt.rcParams.update({'font.size': 14})  # Ajuste este valor conforme necessário
+plt.rcParams.update({'font.size': 6})  # Ajuste este valor conforme necessário
 
 # Variáveis de controle para filtragem por intervalo de tempo
-filter_time = True  # Defina como True para habilitar a filtragem por intervalo de tempo
-start_time = 15   # Tempo inicial para filtragem (em unidades do tempo do sistema)
-end_time = 30     # Tempo final para filtragem (em unidades do tempo do sistema)
+filter_time = False  # Defina como True para habilitar a filtragem por intervalo de tempo
+start_time = 40   # Tempo inicial para filtragem (em unidades do tempo do sistema)
+end_time = 170     # Tempo final para filtragem (em unidades do tempo do sistema)
 
 # Variáveis para espessura da linha e tamanho dos marcadores
 linewidth = 0.75
 markersize = 0.25
 
 # Carregar os dados do arquivo CSV
-file_path = 'lovelace2307-ufsc1_part_28.csv'
+file_path = 'lovelace2207-ufsc1_part_8.csv'
 data = pd.read_csv(file_path)
 
 # Converter tempo do sistema de milissegundos para segundos e ajustar para começar em zero
@@ -39,24 +39,29 @@ filtered_data['power'] = filtered_data.apply(lambda row: row['data4'] + (row['da
 # Calcular a potência do motor combinando data2 (LSB) e data3 (MSB) e remover o offset de 20000
 filtered_data['motor_power'] = filtered_data.apply(lambda row: row['data2'] + (row['data3'] << 8) - 20000, axis=1)
 
-# Calcular o torque do motor combinando data0 (LSB) e data1 (MSB) e dividir por 10
+# Calcular o torque do motor combinando data0 (LSB) e data1 (MSB), dividir por 10 e remover 1000
 filtered_data['torque'] = filtered_data.apply(lambda row: (row['data0'] + (row['data1'] << 8)) / 10, axis=1) - 1000
 
-# Calcular a rotação do motor combinando data6 (LSB) e data7 (MSB)
+# Calcular a rotação do motor combinando data6 (LSB) e data7 (MSB) e remover 1000
 filtered_data['motor_rpm'] = filtered_data.apply(lambda row: row['data6'] + (row['data7'] << 8), axis=1) - 1000
 
-# Filtrar mensagens com msgId 46 (para corrente)
+# Filtrar mensagens com msgId 46 (para corrente e temperatura do inversor)
 current_data = data[data['msgId'] == 46]
 
-# Converter data2 e data3 de hexadecimal para inteiro
+# Converter data2, data3, data6 e data7 de hexadecimal para inteiro
 current_data['data2'] = current_data['data2'].apply(lambda x: int(str(x), 16))
 current_data['data3'] = current_data['data3'].apply(lambda x: int(str(x), 16))
+current_data['data6'] = current_data['data6'].apply(lambda x: int(str(x), 16))
+current_data['data7'] = current_data['data7'].apply(lambda x: int(str(x), 16))
 
-# Calcular a corrente combinando data2 (LSB) e data3 (MSB), adicionar o offset de 1000, dividir por 10 e remover 900
+# Calcular a corrente combinando data2 (LSB) e data3 (MSB), adicionar o offset de 1000, dividir por 10 e remover 1000
 current_data['current'] = current_data.apply(lambda row: (row['data2'] + (row['data3'] << 8)) / 10 - 1000, axis=1)
 
+# Calcular a temperatura do inversor combinando data6 (LSB) e data7 (MSB) e dividir por 10
+current_data['inverter_temp'] = current_data.apply(lambda row: (row['data6'] + (row['data7'] << 8)) / 10, axis=1)
+
 # Filtrar mensagens com msgId 42 (para acelerador e flag Ready to Drive)
-accelerator_data = data[data['msgId'] == 42] 
+accelerator_data = data[data['msgId'] == 42]
 
 # Converter data0, data1 e data5 de hexadecimal para inteiro
 accelerator_data['data0'] = accelerator_data['data0'].apply(lambda x: int(str(x), 16))
@@ -71,7 +76,7 @@ accelerator_data['ready_to_drive'] = accelerator_data['data5']
 
 # Mesclar todos os dados com base nos valores de tempoDoSistema mais próximos
 final_merged_data = pd.merge_asof(filtered_data[['tempoDoSistema', 'power', 'motor_power', 'torque', 'motor_rpm']], 
-                                  current_data[['tempoDoSistema', 'current']], 
+                                  current_data[['tempoDoSistema', 'current', 'inverter_temp']], 
                                   on='tempoDoSistema', 
                                   direction='nearest')
 
@@ -93,9 +98,10 @@ print("Torque do Motor (N.m):", final_merged_data['torque'].max())
 print("Rotação do Motor (RPM):", final_merged_data['motor_rpm'].max())
 print("Acelerador (%):", final_merged_data['accelerator'].max())
 print("Ready to Drive (Flag):", final_merged_data['ready_to_drive'].max())
+print("Temperatura do Inversor (°C):", final_merged_data['inverter_temp'].max())
 
-# Plot the adjusted inverter power, motor power, motor RPM, accelerator percentage, torque, and ready to drive flag over time with thinner lines and smaller markers
-fig, (ax1, ax3) = plt.subplots(1, 2, figsize=(24, 6))
+# Plot the adjusted inverter power, motor power, motor RPM, accelerator percentage, torque, ready to drive flag, and inverter temperature over time with thinner lines and smaller markers
+fig, (ax1, ax3, ax5) = plt.subplots(1, 3, figsize=(20, 6))
 
 # Plot inverter power, motor power and motor RPM on the first subplot
 ax1.set_xlabel('Tempo do Sistema (s)')
@@ -115,6 +121,7 @@ lines = line1 + line2 + line3
 labels = [line.get_label() for line in lines]
 ax1.legend(lines, labels, loc='upper left')
 
+# Title and grid for the first
 # Title and grid for the first subplot
 ax1.set_title('Potência do Inversor, Potência do Motor e Rotação do Motor ao longo do tempo')
 ax1.grid(True)
@@ -132,18 +139,25 @@ line4 = ax4.plot(final_merged_data['tempoDoSistema'], final_merged_data['torque'
 line5 = ax4.plot(final_merged_data['tempoDoSistema'], final_merged_data['ready_to_drive'], label='Ready to Drive', marker='x', linestyle='-', color='tab:blue', linewidth=linewidth, markersize=markersize)
 ax4.tick_params(axis='y', labelcolor='tab:purple')
 
-#Adicionar legenda ao segundo gráfico
-
+# Adicionar legenda ao segundo gráfico
 lines = ax3.get_lines() + ax4.get_lines()
 labels = [line.get_label() for line in lines]
 ax3.legend(lines, labels, loc='upper left')
 
-#Title and grid for the second subplot
-
+# Title and grid for the second subplot
 ax3.set_title('Acelerador (%), Torque do Motor e Ready to Drive ao longo do tempo')
 ax3.grid(True)
 
-#Adjust layout to prevent overlap
+# Plot inverter temperature on the third subplot
+ax5.set_xlabel('Tempo do Sistema (s)')
+ax5.set_ylabel('Temperatura do Inversor (°C)', color='tab:blue')
+ax5.plot(final_merged_data['tempoDoSistema'], final_merged_data['inverter_temp'], label='Temperatura do Inversor (°C)', marker='o', linestyle='-', color='tab:blue', linewidth=linewidth, markersize=markersize)
+ax5.tick_params(axis='y', labelcolor='tab:blue')
 
+# Title and grid for the third subplot
+ax5.set_title('Temperatura do Inversor ao longo do tempo')
+ax5.grid(True)
+
+# Adjust layout to prevent overlap
 plt.tight_layout()
 plt.show()
