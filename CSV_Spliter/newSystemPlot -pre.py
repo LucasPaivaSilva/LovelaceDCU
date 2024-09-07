@@ -6,15 +6,15 @@ plt.rcParams.update({'font.size': 6})  # Ajuste este valor conforme necessário
 
 # Variáveis de controle para filtragem por intervalo de tempo
 filter_time = False  # Defina como True para habilitar a filtragem por intervalo de tempo
-start_time = 40   # Tempo inicial para filtragem (em unidades do tempo do sistema)
-end_time = 170     # Tempo final para filtragem (em unidades do tempo do sistema)
+start_time = 600   # Tempo inicial para filtragem (em unidades do tempo do sistema)
+end_time = 750     # Tempo final para filtragem (em unidades do tempo do sistema)
 
 # Variáveis para espessura da linha e tamanho dos marcadores
 linewidth = 0.75
 markersize = 0.25
 
 # Carregar os dados do arquivo CSV
-file_path = 'lovelace2107-ufsc_part_8.csv'
+file_path = 'lovelace0308-ecpa3_part_38.csv'
 data = pd.read_csv(file_path)
 
 # Converter tempo do sistema de milissegundos para segundos e ajustar para começar em zero
@@ -40,7 +40,7 @@ filtered_data['power'] = filtered_data.apply(lambda row: row['data4'] + (row['da
 filtered_data['motor_power'] = filtered_data.apply(lambda row: row['data2'] + (row['data3'] << 8) - 20000, axis=1)
 
 # Calcular o torque do motor combinando data0 (LSB) e data1 (MSB), dividir por 10 e remover 1000
-filtered_data['torque'] = filtered_data.apply(lambda row: (row['data0'] + (row['data1'] << 8)) / 10, axis=1) - 0
+filtered_data['torque'] = filtered_data.apply(lambda row: (row['data0'] + (row['data1'] << 8)) / 10, axis=1) - 1000
 
 # Calcular a rotação do motor combinando data6 (LSB) e data7 (MSB) e remover 1000
 filtered_data['motor_rpm'] = filtered_data.apply(lambda row: row['data6'] + (row['data7'] << 8), axis=1) - 0
