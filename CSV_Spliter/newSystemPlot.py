@@ -14,7 +14,7 @@ linewidth = 0.75
 markersize = 0.25
 
 # Carregar os dados do arquivo CSV
-file_path = 'lovelace2207-ufsc1_part_8.csv'
+file_path = 'lovelace0308-ecpa3_part_38.csv'
 data = pd.read_csv(file_path)
 
 # Converter tempo do sistema de milissegundos para segundos e ajustar para começar em zero
