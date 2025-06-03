@@ -56,19 +56,6 @@ current_data['motor_temp'] = current_data.apply(lambda row: (row['data4'] + (row
 # Calcular a temperatura do inversor combinando data6 (LSB) e data7 (MSB) e dividir por 10
 current_data['inverter_temp'] = current_data.apply(lambda row: (row['data6'] + (row['data7'] << 8)) / 10, axis=1)
 
-# Calcular a tensão do barramento do inversor combinando data0 (LSB) e data1 (MSB) e dividir por 10
-current_data['bus_voltage'] = current_data.apply(lambda row: (row['data0'] + (row['data1'] << 8)) / 10, axis=1)
-
-# Filtrar mensagens com msgId 43 (para tensão do acumulador)
-accumulator_data = data[data['msgId'] == 43]
-
-# Converter data4 e data5 de hexadecimal para inteiro
-for i in [4, 5]:
-    accumulator_data[f'data{i}'] = accumulator_data[f'data{i}'].apply(lambda x: int(str(x), 16))
-
-# Calcular a tensão do acumulador combinando data4 (LSB) e data5 (MSB) e dividir por 10
-accumulator_data['accumulator_voltage'] = accumulator_data.apply(lambda row: (row['data4'] + (row['data5'] << 8)) / 10, axis=1)
-
 # Filtrar mensagens com msgId 42 (para acelerador e flag Ready to Drive)
 accelerator_data = data[data['msgId'] == 42]
 
@@ -86,21 +73,15 @@ accelerator_data['ready_to_drive'] = accelerator_data['data5']
 filtered_data = filtered_data.sort_values('tempoDoSistema')
 current_data = current_data.sort_values('tempoDoSistema')
 accelerator_data = accelerator_data.sort_values('tempoDoSistema')
-accumulator_data = accumulator_data.sort_values('tempoDoSistema')
 
 # Mesclar todos os dados com base nos valores de tempoDoSistema mais próximos
 final_merged_data = pd.merge_asof(filtered_data[['tempoDoSistema', 'power', 'motor_power', 'torque', 'motor_rpm']], 
-                                  current_data[['tempoDoSistema', 'current', 'inverter_temp', 'motor_temp', 'bus_voltage']], 
+                                  current_data[['tempoDoSistema', 'current', 'inverter_temp', 'motor_temp']], 
                                   on='tempoDoSistema', 
                                   direction='nearest')
 
 final_merged_data = pd.merge_asof(final_merged_data, 
                                   accelerator_data[['tempoDoSistema', 'accelerator', 'ready_to_drive']], 
-                                  on='tempoDoSistema', 
-                                  direction='nearest')
-
-final_merged_data = pd.merge_asof(final_merged_data, 
-                                  accumulator_data[['tempoDoSistema', 'accumulator_voltage']], 
                                   on='tempoDoSistema', 
                                   direction='nearest')
 
@@ -112,13 +93,27 @@ if filter_time:
 final_merged_data.loc[final_merged_data['inverter_temp'] >= 100, 'inverter_temp'] = np.nan
 final_merged_data.loc[final_merged_data['motor_temp'] >= 100, 'motor_temp'] = np.nan
 final_merged_data.loc[(final_merged_data['torque'] < -30) | (final_merged_data['torque'] > 100), 'torque'] = np.nan
-final_merged_data.loc[(final_merged_data['power'] < -10000) | (final_merged_data['power'] > 30000), 'power'] = np.nan
-final_merged_data.loc[(final_merged_data['motor_power'] < -10000) | (final_merged_data['motor_power'] > 30000), 'motor_power'] = np.nan
+final_merged_data.loc[(final_merged_data['power'] < -2000) | (final_merged_data['power'] > 30000), 'power'] = np.nan
+final_merged_data.loc[(final_merged_data['motor_power'] < -2000) | (final_merged_data['motor_power'] > 30000), 'motor_power'] = np.nan
 final_merged_data.loc[(final_merged_data['motor_rpm'] < 0) | (final_merged_data['motor_rpm'] > 5000), 'motor_rpm'] = np.nan
-final_merged_data.loc[final_merged_data['bus_voltage'] > 200, 'bus_voltage'] = np.nan
-final_merged_data.loc[final_merged_data['accumulator_voltage'] > 200, 'accumulator_voltage'] = np.nan
 
-# Imprimir os valores máximos de cada variável
+# Calculate the average inverter power excluding zero values
+non_zero_power = final_merged_data['power'][final_merged_data['power'] != 0]
+average_inverter_power = non_zero_power.mean()
+
+non_zero_rpm = final_merged_data['motor_rpm'][final_merged_data['motor_rpm'] != 0]
+average_rpm = non_zero_rpm.mean()
+
+# Print the average inverter power
+print(f"Média da Potência do Inversor (W) excluindo zeros: {average_inverter_power:.2f}")
+print(f"Média da rotação do motor excluindo zeros: {average_rpm:.2f}")
+
+# Calcular a energia total integrada (em kWh) da potência do inversor ao longo do tempo
+final_merged_data['delta_t'] = final_merged_data['tempoDoSistema'].diff().fillna(0)  # Diferença de tempo entre pontos
+final_merged_data['energy'] = (final_merged_data['power'] * final_merged_data['delta_t']) / 3600000  # Energia em kWh
+total_energy_kwh = final_merged_data['energy'].sum()
+
+# Imprimir os valores máximos de cada variável e a energia total em kWh
 print("Valores Máximos:")
 print("Potência do Inversor (W):", final_merged_data['power'].max())
 print("Potência do Motor (W):", final_merged_data['motor_power'].max())
@@ -129,8 +124,7 @@ print("Acelerador (%):", final_merged_data['accelerator'].max())
 print("Ready to Drive (Flag):", final_merged_data['ready_to_drive'].max())
 print("Temperatura do Inversor (°C):", final_merged_data['inverter_temp'].max())
 print("Temperatura do Motor (°C):", final_merged_data['motor_temp'].max())
-print("Tensão no Barramento (V):", final_merged_data['bus_voltage'].max())
-print("Tensão do Acumulador (V):", final_merged_data['accumulator_voltage'].max())
+print(f"Total de Energia consumida pelo Inversor: {total_energy_kwh:.4f} kWh")
 
 # Plotar os dados ajustados de acordo com as novas especificações
 fig, axes = plt.subplots(2, 2, figsize=(20, 12))
@@ -177,31 +171,26 @@ ax.set_title('Rotação do Motor ao longo do tempo')
 ax.legend()
 ax.grid(True)
 
-# Quarto Gráfico: Temperaturas e Tensões
+# Quarto Gráfico: Temperaturas do Motor e Inversor
 ax = axes[1, 1]
 ax.plot(final_merged_data['tempoDoSistema'], final_merged_data['inverter_temp'], label='Temperatura do Inversor (°C)', marker='o', linestyle='-', color='tab:blue', linewidth=linewidth, markersize=markersize)
 ax.plot(final_merged_data['tempoDoSistema'], final_merged_data['motor_temp'], label='Temperatura do Motor (°C)', marker='s', linestyle='-', color='tab:orange', linewidth=linewidth, markersize=markersize)
 ax.set_xlabel('Tempo do Sistema (s)')
-ax.set_ylabel('Temperatura (°C)', color='tab:blue')
-ax.tick_params(axis='y', labelcolor='tab:blue')
-
-# Criar segundo eixo Y para as tensões
-#ax_twin = ax.twinx()
-#ax_twin.plot(final_merged_data['tempoDoSistema'], final_merged_data['bus_voltage'], label='Tensão no Barramento (V)', marker='x', linestyle='-', color='tab:green', linewidth=linewidth, markersize=markersize)
-#ax_twin.plot(final_merged_data['tempoDoSistema'], final_merged_data['accumulator_voltage'], label='Tensão do Acumulador (V)', marker='d', linestyle='-', color='tab:red', linewidth=linewidth, markersize=markersize)
-#ax_twin.set_ylabel('Tensão (V)', color='tab:green')
-#ax_twin.tick_params(axis='y', labelcolor='tab:green')
-#ax_twin.set_ylim(0, 200)
-
-# Combinar legendas
-lines1, labels1 = ax.get_legend_handles_labels()
-#lines2, labels2 = ax_twin.get_legend_handles_labels()
-#ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
-ax.legend(lines1 , labels1, loc='upper left')
-
-ax.set_title('Temperaturas e Tensões ao longo do tempo')
+ax.set_ylabel('Temperatura (°C)')
+ax.set_title('Temperaturas do Inversor e do Motor ao longo do tempo')
+ax.legend()
 ax.grid(True)
 
 # Ajustar o layout para evitar sobreposição
 plt.tight_layout()
 plt.show()
+
+# Selecionando as colunas que serão exportadas
+final_merged_data_to_export = final_merged_data[['tempoDoSistema', 'power', 'motor_power', 'torque', 'motor_rpm', 'current', 'inverter_temp', 'motor_temp', 'accelerator', 'ready_to_drive']]
+
+# Salvando o DataFrame final como CSV
+file_export_path = 'enduro2024_Data_V1.csv'  # Substitua 'caminho_do_arquivo' pelo caminho desejado
+final_merged_data_to_export.to_csv(file_export_path, index=False)
+
+# Mensagem de sucesso
+print(f"Arquivo CSV salvo em: {file_export_path}")

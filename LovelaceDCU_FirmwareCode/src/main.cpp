@@ -24,17 +24,20 @@ float inverterPower = 1234;
 float motorPower = 1234;
 float motorRPM = 1234;
 float motorTorque = 0;
+float lvVoltage = 0;
+float float_42_42 = 0;
 
 float speed = 0;
 int pedal = 70; 
+int flag_run_identify = 0;
 
 bool rtd = false;      // Exemplo de inicialização
 
 // Configuração da Rede WiFi
-const char* ssid = "Lovelace-DCU";
-const char* password = "15072024";
+const char* ssid = "Lovelace2-DCU";
+const char* password = "bolodecenoura";
 
-#define FILE_NAME "/lovelace0308-ecpa3.csv"
+#define FILE_NAME "/lovelace2_0306-ufsc.csv"
 
 bool flagUpdateTorqueMode = false;
 uint8_t torqueModeMod = 0;
@@ -367,7 +370,7 @@ void setup()
     delay(6000);
 
     Serial.println("Basic Demo - ESP32-Arduino-CAN");
-    CAN_cfg.speed = CAN_SPEED_500KBPS;
+    CAN_cfg.speed = CAN_SPEED_250KBPS;
     CAN_cfg.tx_pin_id = GPIO_NUM_27;
     CAN_cfg.rx_pin_id = GPIO_NUM_26;
     CAN_cfg.rx_queue = xQueueCreate(10, sizeof(CAN_frame_t));
@@ -444,84 +447,103 @@ void loop()
         // Adicionar ao arquivo CSV
         appendFile(SD, FILE_NAME, data);
 
-        if (rx_frame.MsgID == 0x042){
+        if (rx_frame.MsgID == 0x106){
+            errorCode = rx_frame.data.u8[0];
+        }
+
+        if (rx_frame.MsgID == 0x300){
+            // 0x300
+            // Byte 0 -> dspUsage 
+            // Byte 1 -> dspUsageMax
+            // Byte 2 -> TorqueMod
+            // Byte 3 -> flag_run_identify
+            dpsUsage = rx_frame.data.u8[0];
+
+            torqueCode = rx_frame.data.u8[2];
+            torqueLimit = (float) (torqueCode * 0.1f);
+
+            flag_run_identify = rx_frame.data.u8[3];
+        }
+
+        if (rx_frame.MsgID == 0x301) {
+            // 0x301
+            // Float 1 - 42.42
+            // Float 2 - LV voltage
+            // Reconstruir os floats
+            float value1, value2;
+            memcpy(&value1, &rx_frame.data.u8[0], sizeof(float));
+            memcpy(&value2, &rx_frame.data.u8[4], sizeof(float));
+
+            float_42_42 = value1;
+            lvVoltage = value2;
+        }
+
+        if (rx_frame.MsgID == 0x302) {
+            // 0x302
+            // Float 1 - Inverter Temp
+            // Float 2 - Motor Temp
+            // Reconstruir os floats
+            float value1, value2;
+            memcpy(&value1, &rx_frame.data.u8[0], sizeof(float));
+            memcpy(&value2, &rx_frame.data.u8[4], sizeof(float));
+
+            inverterTemp = value1;
+            motorTemp = value2;
+        }
+
+        if (rx_frame.MsgID == 0x303) {
+            // 0x303
+            // Float 1 - HVCurrent
+            // Float 2 - HVVoltage
+            // Reconstruir os floats
+            float value1, value2;
+            memcpy(&value1, &rx_frame.data.u8[0], sizeof(float));
+            memcpy(&value2, &rx_frame.data.u8[4], sizeof(float));
+
+            hvCurrent = value1;
+            hvVoltage = value2;
+        }
+
+        if (rx_frame.MsgID == 0x304) {
+            // 0x304
+            // Float 1 - Motor Output Power
+            // Float 2 - Motor Input Power / Inverter Power
+            // Reconstruir os floats
+            // Reconstruir os floats
+            float value1, value2;
+            memcpy(&value1, &rx_frame.data.u8[0], sizeof(float));
+            memcpy(&value2, &rx_frame.data.u8[4], sizeof(float));
+
+            motorPower = value1;
+            inverterPower = value2;
+        }
+
+        if (rx_frame.MsgID == 0x305) {
+            // 0x305
+            // Float 1 - Motor Torque
+            // Float 2 - Motor RPM
+            // Reconstruir os floats
+            // Reconstruir os floats
+            float value1, value2;
+            memcpy(&value1, &rx_frame.data.u8[0], sizeof(float));
+            memcpy(&value2, &rx_frame.data.u8[4], sizeof(float));
+
+            motorTorque = value1;
+            motorRPM = value2;
+            speed = motorRPM * 0.0196;
+        }
+
+        if (rx_frame.MsgID == 0x171){
             pedal = (rx_frame.data.u8[1] << 8) | rx_frame.data.u8[0];
             rtd = rx_frame.data.u8[5];
         }
-
-        if (rx_frame.MsgID == 0x048) { // Supondo que o ID da mensagem seja 0x048
-            pwmData = rx_frame.data.u8[0];
-            dpsUsage = rx_frame.data.u8[1];
-            torqueCode = rx_frame.data.u8[2];
-            errorCode = rx_frame.data.u8[3];
-            torqueLimit = (float) (torqueCode * 0.1f);
-            
-        }
-
-        if (rx_frame.MsgID == 0x046) { // Supondo que o ID da mensagem seja 0x046
-            // Extrair as temperaturas
-            uint16_t motor_temp_raw = (rx_frame.data.u8[5] << 8) | rx_frame.data.u8[4];
-            uint16_t inverter_temp_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
-            uint16_t dc_current_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
-            uint16_t hv_voltage_raw = (rx_frame.data.u8[1] << 8) | rx_frame.data.u8[0];
-
-            // Converter para float (assumindo que cada unidade representa 0.1 grau)
-            motorTemp = convert_to_float(motor_temp_raw, 0.1);
-            inverterTemp = convert_to_float(inverter_temp_raw, 0.1);
-            hvVoltage = convert_to_float(hv_voltage_raw, 0.1);
-            hvCurrent = convert_to_float(dc_current_raw, 0.1) - 1000.0;
-        }
-
-        /*
-        if (rx_frame.MsgID == 0x049) {
-            // Copiar os bytes para os valores float_t
-            //memcpy(&hvCurrent, &rx_frame.data.u8[0], sizeof(float_t));
-            //memcpy(&hvVoltage, &rx_frame.data.u8[4], sizeof(float_t));
-            // Imprimir os valores recebidos
-            //Serial.print("Received current 1: ");
-            //Serial.println(hvCurrent, 6); // Exibe com 6 casas decimais
-            //Serial.print("Received voltage 2: ");
-            //Serial.println(hvVoltage, 6); // Exibe com 6 casas decimais
-        }
-
-        if (rx_frame.MsgID == 0x050) {
-            // Copiar os bytes para os valores float_t
-            memcpy(&motorPower, &rx_frame.data.u8[0], sizeof(float_t));
-            memcpy(&inverterPower, &rx_frame.data.u8[4], sizeof(float_t));
-        }
-
-        if (rx_frame.MsgID == 0x051) {
-            // Copiar os bytes para os valores float_t
-            memcpy(&motorTorque, &rx_frame.data.u8[0], sizeof(float_t));
-            memcpy(&motorRPM, &rx_frame.data.u8[4], sizeof(float_t));
-        }
-        */
-
-
-        
-        if (rx_frame.MsgID == 0x047) { // Supondo que o ID da mensagem seja 0x046
-            // Extrair as temperaturas
-            uint16_t motor_power_raw = (rx_frame.data.u8[3] << 8) | rx_frame.data.u8[2];
-            uint16_t inverter_power_raw = (rx_frame.data.u8[5] << 8) | rx_frame.data.u8[4];
-            uint16_t motor_RPM_raw = (rx_frame.data.u8[7] << 8) | rx_frame.data.u8[6];
-
-            // Converter para float (assumindo que cada unidade representa 0.1 grau)
-            motorPower = convert_to_float(motor_power_raw, 1) - 20000.0;
-            inverterPower = convert_to_float(inverter_power_raw, 1) - 20000.0;
-            motorRPM = convert_to_float(motor_RPM_raw, 1) - 1000.0;
-            speed = motorRPM * 0.0196;
-        }
-        
-
         // Print debug information
-        //Serial.print(data);
+        Serial.print(data);
     }
 
      // Enviar mensagem CAN
     if (flagUpdateTorqueMode == true)
     {
-        
-        //sendTorqueMod(torqueModeMod);
         if (testmode){
             torqueLimit = torqueModeMod * 0.1f;
         }
@@ -529,9 +551,5 @@ void loop()
            sendTorqueMod(torqueModeMod); 
         }
         flagUpdateTorqueMode = false;
-        //Serial.println("TorqueMod enviado: " + String(torqueModeMod));
-        
-
-        //ESP32Can.CANWriteFrame(&tx_frame);
     }
 }
