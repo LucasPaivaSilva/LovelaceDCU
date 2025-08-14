@@ -1,0 +1,85 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+BU_: DCU-LovelaceGEN2 
+BO_ 771 Inverter_Data_1: 8 DCU-LovelaceGEN2
+   SG_ HV_Current : 0|32@5- (1,0) [-30000|30000] "A" DCU-LovelaceGEN2
+   SG_ HV_Voltage : 32|32@5- (1,0) [0|1] "V" DCU-LovelaceGEN2
+
+BO_ 770 Inverter_Temperatures: 8 DCU-LovelaceGEN2
+   SG_ Motor_Temp : 32|32@5- (1,0) [0|1] "C" DCU-LovelaceGEN2
+   SG_ Inverter_Temp : 0|32@5- (1,0) [0|1] "C" DCU-LovelaceGEN2
+
+BO_ 772 Inverter_Data_2: 8 DCU-LovelaceGEN2
+   SG_ Motor_Output_Power : 32|32@5- (1,0) [0|1] "W" DCU-LovelaceGEN2
+   SG_ Inverter_Output_Power : 0|32@5- (1,0) [0|1] "W" DCU-LovelaceGEN2
+
+BO_ 369 ECU_Command: 8 DCU-LovelaceGEN2
+   SG_ RTD : 40|8@1- (1,0) [0|1] "" DCU-LovelaceGEN2
+   SG_ APPS : 0|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ BPPS : 16|16@1+ (1,0) [0|1] "" DCU-LovelaceGEN2
+   SG_ REGEN : 32|8@1+ (1,0) [0|1] "" DCU-LovelaceGEN2
+   SG_ EventMode : 48|8@1+ (1,0) [0|1] "" DCU-LovelaceGEN2
+   SG_ TorqueRequestDisable : 56|8@1+ (1,0) [0|1] "" DCU-LovelaceGEN2
+
+BO_ 1313 BMS_Current_Sensor: 6 DCU-LovelaceGEN2
+   SG_ BMS_Current : 16|32@1- (0.001,0) [0|1000] "" DCU-LovelaceGEN2
+
+BO_ 1314 BMS_Voltage_sensor: 6 DCU-LovelaceGEN2
+   SG_ BMS_Voltage : 16|32@1- (0.001,0) [0|1] "" Vector__XXX
+
+BO_ 773 Inverter_Data_3: 8 DCU-LovelaceGEN2
+   SG_ Inverter_motor_torque : 0|32@5- (1,0) [0|1] "" DCU-LovelaceGEN2
+   SG_ Inverter_motor_rpm : 32|32@5- (1,0) [0|1] "" DCU-LovelaceGEN2
+
+CM_ BU_ DCU-LovelaceGEN2 "Main PWT Node";
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#1e1e1e";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#ffffff";
+BA_DEF_DEF_ "matchingcriteria" 0;
+BA_DEF_DEF_ "filterlabeling" 1;
+BA_ "GenMsgForegroundColor" BO_ 771 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 770 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 772 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 369 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 1313 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 1314 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 773 "#ffffff";

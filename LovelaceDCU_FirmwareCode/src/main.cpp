@@ -8,7 +8,6 @@
 
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
-bool testmode = false;
 
 // Variáveis para exibição
 float inverterTemp = 12.3; // Exemplo
@@ -16,7 +15,7 @@ float motorTemp = 45.6; // Exemplo
 int inverterErrorCode = 0; // Exemplo
 uint8_t pwmData, dpsUsage, torqueCode, errorCode;
 // Variáveis adicionais
-float hvVoltage = 350.0;  // Exemplo de inicialização
+float hvVoltage = 1.42;  // Exemplo de inicialização
 float torqueLimit = 0; // Exemplo de inicialização
 
 float hvCurrent = 1234;
@@ -37,7 +36,7 @@ bool rtd = false;      // Exemplo de inicialização
 const char* ssid = "Lovelace2-DCU";
 const char* password = "bolodecenoura";
 
-#define FILE_NAME "/lovelace2_0306-ufsc.csv"
+#define FILE_NAME "/lovelace2-2606.csv"
 
 bool flagUpdateTorqueMode = false;
 uint8_t torqueModeMod = 0;
@@ -217,7 +216,7 @@ void sendTorqueMod(uint8_t mode){
     tx_frame.FIR.B.FF = CAN_frame_std;
     tx_frame.MsgID = 0x041;
     tx_frame.FIR.B.DLC = 8;
-    tx_frame.data.u8[0] = 0xFF;
+    tx_frame.data.u8[0] = mode;
     tx_frame.data.u8[1] = 0xFF;
     tx_frame.data.u8[2] = 0xFF;
     tx_frame.data.u8[3] = 0xFF;
@@ -225,12 +224,11 @@ void sendTorqueMod(uint8_t mode){
     tx_frame.data.u8[5] = 0xFF;
     tx_frame.data.u8[6] = 0xFF;
     tx_frame.data.u8[7] = 0xFF;
-    
-    tx_frame.data.u8[0] = mode;
 
     ESP32Can.CANWriteFrame(&tx_frame);
 
 }
+
 
 // Configuração do CAN
 CAN_device_t CAN_cfg;
@@ -344,7 +342,7 @@ void setupServer() {
         flagUpdateTorqueMode = true;
         request->redirect("/");
     });
-
+ 
     server.begin();
 }
 
@@ -390,39 +388,11 @@ void setup()
     }
 }
 
-void generateRandomData() {
-  inverterTemp = random(2000, 4000) / 100.0;  // Ex.: 20.00 a 40.00 graus
-  motorTemp = random(2000, 4500) / 100.0;     // Ex.: 20.00 a 45.00 graus
-  inverterErrorCode = random(0, 10);          // Códigos de erro de 0 a 9
-  pwmData = random(0, 255);
-  dpsUsage = random(0, 100);
-  errorCode = random(0, 128);
-
-  hvVoltage = random(1000, 2000) / 10.0;      // 300.0V a 400.0V
-  //torqueLimit = random(1, 10) / 10.0;     // 50.0 a 100.0
-
-  hvCurrent = random(1000, 1500);             // 1000 a 1500
-  inverterPower = random(1000, 2000);         // 1000W a 2000W
-  motorPower = random(1000, 2000);            // 1000W a 2000W
-  motorRPM = random(1000, 3000);              // 1000 RPM a 3000 RPM
-  motorTorque = random(10, 70);             // 100 Nm a 300 Nm
-
-  speed = motorRPM * 0.02;                     // Conversão simples de RPM para km/h
-  pedal = random(0, 65535);                     // Posição do pedal de 0% a 100%
-
-  rtd = random(0, 2);                         // Simulação de estado booleano
-}
-
 // Função de loop
 void loop()
 {
     CAN_frame_t rx_frame;
     unsigned long currentMillis = millis();
-
-    
-    if (testmode){
-        generateRandomData();
-    }
 
     // Receber próxima trama CAN da fila
     if (xQueueReceive(CAN_cfg.rx_queue, &rx_frame, 3 * portTICK_PERIOD_MS) == pdTRUE)
@@ -544,12 +514,8 @@ void loop()
      // Enviar mensagem CAN
     if (flagUpdateTorqueMode == true)
     {
-        if (testmode){
-            torqueLimit = torqueModeMod * 0.1f;
-        }
-        else{
-           sendTorqueMod(torqueModeMod); 
-        }
+        sendTorqueMod(torqueModeMod);
         flagUpdateTorqueMode = false;
     }
 }
+

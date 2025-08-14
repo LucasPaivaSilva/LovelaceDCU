@@ -37,18 +37,18 @@ filtered_data = filtered_data[(filtered_data['tempoDoSistema'] >= tempo_inicial)
 
 fig, axes = plt.subplots(2, 1, figsize=(3.5*1.5, 5.0))  # Aproximadamente 88mm de largura e altura ajustada
 
-axes[0].plot(filtered_data['tempoDoSistema'], filtered_data['power'], label='Potência do Inversor (W)', color='tab:blue', linewidth=0.8)
-axes[0].plot(filtered_data['tempoDoSistema'], filtered_data['motor_power'], label='Potência do Motor (W)', color='tab:orange', linewidth=0.8)
-axes[0].set_xlabel('Tempo do Sistema (s)')
-axes[0].set_ylabel('Potência (W)')
+axes[0].plot(filtered_data['tempoDoSistema'], filtered_data['power'], label='Inverter Power (W)', color='tab:blue', linewidth=0.8)
+axes[0].plot(filtered_data['tempoDoSistema'], filtered_data['motor_power'], label='Motor Power (W)', color='tab:orange', linewidth=0.8)
+axes[0].set_xlabel('System Time (s)')
+axes[0].set_ylabel('Power (W)')
 axes[0].grid(True)
 axes[0].legend(loc='best', fontsize=7)
 
 filtered_data['motor_rpm'] = filtered_data.apply(lambda row: (row['data6'] + (row['data7'] << 8) - 1000), axis=1)
 
-axes[1].plot(filtered_data['tempoDoSistema'], filtered_data['motor_rpm'], label='Velocidade do Motor (RPM)', color='tab:green', linewidth=0.8)
-axes[1].set_xlabel('Tempo do Sistema (s)')
-axes[1].set_ylabel('Velocidade (RPM)')
+axes[1].plot(filtered_data['tempoDoSistema'], filtered_data['motor_rpm'], label='Motor Speed (RPM)', color='tab:green', linewidth=0.8)
+axes[1].set_xlabel('System Time (s)')
+axes[1].set_ylabel('Motor Speed (RPM)')
 axes[1].grid(True)
 axes[1].legend(loc='best', fontsize=7)
 
