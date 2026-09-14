@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 
 # Load the decoded CSV log
-df = pd.read_csv("acceleration_26_06.csv")
+df = pd.read_csv("shakedown/testUFSC.csv")
 
 # As per user feedback, swap the data for the power columns as they might be inverted at the source.
 if 'Motor_Output_Power' in df.columns and 'Inverter_Output_Power' in df.columns:
@@ -15,9 +15,11 @@ if 'Motor_Output_Power' in df.columns and 'Inverter_Output_Power' in df.columns:
 df['Time'] = df['Time'] * 1000
 
 # Define plot time range (in milliseconds)
-use_time_limits = False  # set to False to disable time range limit
-time_start = 146   # adjust as needed
-time_end = 156  # adjust as needed
+use_time_limits = True  # set to False to disable time range limit
+time_start = 114   # adjust as needed
+time_end = 124  # adjust as needed
+#time_start = 146   # adjust as needed
+#time_end = 156  # adjust as needed
 
 # Plot grid layout: 3 columns x 2 rows
 fig, axs = plt.subplots(2, 3, figsize=(16, 10))
@@ -27,7 +29,13 @@ time_mask = (df['Time'] >= time_start) & (df['Time'] <= time_end)
 # --- Define pretty labels for signals ---
 signal_labels = {
     'Motor_Output_Power': 'Motor Output Power (W)',
-    'Inverter_Output_Power': 'Inverter Output Power (W)'
+    'Inverter_Output_Power': 'Inverter Output Power (W)',
+    'Motor_Temp': 'Motor Temp (°C)',
+    'Inverter_Temp': 'Inverter Temp (°C)',
+    'HV_Current': 'Inverter Current (A)',
+    'BMS_Current': 'BMS Current (A)',
+    'HV_Voltage': 'Inverter Voltage (V)',
+    'BMS_Voltage': 'BMS Voltage (V)'
 }
 
 # Plot 1: Powers
@@ -323,5 +331,75 @@ if lines:
 
 ax_inv_temp.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
 fig3.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+# --- Fourth Plot Group: 2x2 Grid of Key Signals ---
+fig4, axs4 = plt.subplots(2, 2, figsize=(12, 8))
+axs4 = axs4.flatten()
+
+# Plot 1: Powers
+ax = axs4[0]
+for signal in ['Motor_Output_Power', 'Inverter_Output_Power']:
+    if signal in df.columns:
+        mask = df[signal].notna()
+        if use_time_limits:
+            mask &= time_mask
+        if mask.any():
+            ax.plot(df['Time'][mask], df[signal][mask], label=signal_labels.get(signal, signal))
+ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+ax.set_title("Power Signals")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Power (W)")
+ax.legend()
+ax.grid(True)
+
+# Plot 2: Temperatures
+ax = axs4[1]
+for signal in ['Motor_Temp', 'Inverter_Temp']:
+    if signal in df.columns:
+        mask = df[signal].notna()
+        if use_time_limits:
+            mask &= time_mask
+        if mask.any():
+            ax.plot(df['Time'][mask], df[signal][mask], label=signal_labels.get(signal, signal))
+ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+ax.set_title("Temperatures")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Temperature (°C)")
+ax.legend()
+ax.grid(True)
+
+# Plot 3: HV and BMS Current
+ax = axs4[2]
+for signal in ['HV_Current', 'BMS_Current']:
+    if signal in df.columns:
+        mask = df[signal].notna()
+        if use_time_limits:
+            mask &= time_mask
+        if mask.any():
+            ax.plot(df['Time'][mask], df[signal][mask], label=signal_labels.get(signal, signal))
+ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+ax.set_title("Inverter and BMS Current")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Current (A)")
+ax.legend()
+ax.grid(True)
+
+# Plot 4: HV and BMS Voltage
+ax = axs4[3]
+for signal in ['HV_Voltage', 'BMS_Voltage']:
+    if signal in df.columns:
+        mask = df[signal].notna()
+        if use_time_limits:
+            mask &= time_mask
+        if mask.any():
+            ax.plot(df['Time'][mask], df[signal][mask], label=signal_labels.get(signal, signal))
+ax.yaxis.set_major_formatter(ScalarFormatter(useOffset=False))
+ax.set_title("Inverter and BMS Voltage")
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Voltage (V)")
+ax.legend()
+ax.grid(True)
+
+fig4.tight_layout(rect=[0, 0.03, 1, 0.95])
 
 plt.show()
